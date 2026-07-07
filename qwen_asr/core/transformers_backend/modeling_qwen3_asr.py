@@ -38,13 +38,21 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.processing_utils import Unpack
 from transformers.utils import auto_docstring, can_return_tuple
 from transformers.utils.deprecation import deprecate_kwarg
-from transformers.utils.generic import TransformersKwargs, check_model_inputs
+from transformers.utils.generic import TransformersKwargs, check_model_inputs as _check_model_inputs
 
 from .configuration_qwen3_asr import (
     Qwen3ASRAudioEncoderConfig,
     Qwen3ASRConfig,
     Qwen3ASRThinkerConfig,
 )
+
+try:
+    _check_model_inputs()
+except TypeError:
+    def check_model_inputs():
+        return _check_model_inputs
+else:
+    check_model_inputs = _check_model_inputs
 
 
 @use_kernel_forward_from_hub("RMSNorm")
