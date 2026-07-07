@@ -1319,7 +1319,7 @@ class Qwen3ASRThinkerForConditionalGeneration(Qwen3ASRPreTrainedModelForConditio
 
         model_inputs["position_ids"] = None
 
-        if cache_position[0] != 0:
+        if cache_position is not None and cache_position[0] != 0:
             model_inputs["input_features"] = None
 
         return model_inputs
