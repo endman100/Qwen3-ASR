@@ -1375,6 +1375,8 @@ class Qwen3ASRForConditionalGeneration(Qwen3ASRPreTrainedModel, GenerationMixin)
             # Process special input values
             if key == "feature_attention_mask":
                 thinker_kwargs[key] = value
+            elif key == "input_features_mask":
+                thinker_kwargs["feature_attention_mask"] = value
             elif key in ("input_features", "attention_mask"):
                 thinker_kwargs[key] = value
             # Put other key to shared kwargs
