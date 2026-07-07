@@ -786,6 +786,26 @@ class Qwen3ASRAudioEncoder(Qwen3ASRPreTrainedModel):
         )
 
 
+def _compute_default_rope_parameters(config, device=None, seq_len=None, layer_type=None):
+    if hasattr(config, "standardize_rope_params"):
+        config.standardize_rope_params()
+
+    rope_parameters = getattr(config, "rope_parameters", None)
+    if isinstance(rope_parameters, dict):
+        rope_parameters = rope_parameters.get(layer_type, rope_parameters) if layer_type is not None else rope_parameters
+    else:
+        rope_parameters = {}
+
+    base = rope_parameters.get("rope_theta", getattr(config, "rope_theta", 10000.0))
+    partial_rotary_factor = rope_parameters.get("partial_rotary_factor", getattr(config, "partial_rotary_factor", 1.0))
+    head_dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
+    dim = int(head_dim * partial_rotary_factor)
+    inv_freq = 1.0 / (
+        base ** (torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float) / dim)
+    )
+    return inv_freq, 1.0
+
+
 class Qwen3ASRThinkerTextRotaryEmbedding(nn.Module):
     inv_freq: torch.Tensor  # fix linting for `register_buffer`
 
@@ -799,7 +819,11 @@ class Qwen3ASRThinkerTextRotaryEmbedding(nn.Module):
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS.get(self.rope_type)
+        if self.rope_init_fn is None and self.rope_type == "default":
+            self.rope_init_fn = _compute_default_rope_parameters
+        if self.rope_init_fn is None:
+            raise KeyError(self.rope_type)
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
