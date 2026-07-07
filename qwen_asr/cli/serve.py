@@ -22,9 +22,9 @@ from qwen_asr.core.transformers_backend import (
 )
 from transformers import AutoConfig, AutoModel, AutoProcessor
 
-AutoConfig.register("qwen3_asr", Qwen3ASRConfig)
-AutoModel.register(Qwen3ASRConfig, Qwen3ASRForConditionalGeneration)
-AutoProcessor.register(Qwen3ASRConfig, Qwen3ASRProcessor)
+AutoConfig.register("qwen3_asr", Qwen3ASRConfig, exist_ok=True)
+AutoModel.register(Qwen3ASRConfig, Qwen3ASRForConditionalGeneration, exist_ok=True)
+AutoProcessor.register(Qwen3ASRConfig, Qwen3ASRProcessor, exist_ok=True)
 
 try:
     from qwen_asr.core.vllm_backend import Qwen3ASRForConditionalGeneration
