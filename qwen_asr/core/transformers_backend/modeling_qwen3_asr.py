@@ -809,6 +809,10 @@ def _compute_default_rope_parameters(config, device=None, seq_len=None, layer_ty
 class Qwen3ASRThinkerTextRotaryEmbedding(nn.Module):
     inv_freq: torch.Tensor  # fix linting for `register_buffer`
 
+    @staticmethod
+    def compute_default_rope_parameters(config, device=None, seq_len=None, layer_type=None):
+        return _compute_default_rope_parameters(config, device=device, seq_len=seq_len, layer_type=layer_type)
+
     def __init__(self, config: Qwen3ASRConfig, device=None):
         super().__init__()
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
