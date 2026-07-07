@@ -334,9 +334,10 @@ class Qwen3ASRThinkerConfig(PretrainedConfig):
         audio_start_token_id=151647,
         user_token_id=872,
         initializer_range=0.02,
+        pad_token_id=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(pad_token_id=pad_token_id, **kwargs)
         self.user_token_id = user_token_id
         self.audio_start_token_id = audio_start_token_id
         self.initializer_range = initializer_range
