@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
+import inspect
 from dataclasses import dataclass
 from typing import Callable, Optional, Union
 
@@ -53,6 +54,33 @@ except TypeError:
         return _check_model_inputs
 else:
     check_model_inputs = _check_model_inputs
+
+
+_CREATE_CAUSAL_MASK_PARAMETERS = set(inspect.signature(create_causal_mask).parameters)
+
+
+def _create_qwen3_asr_causal_mask(
+    *,
+    config,
+    inputs_embeds,
+    attention_mask,
+    cache_position,
+    past_key_values,
+    position_ids,
+):
+    kwargs = {
+        "config": config,
+        "attention_mask": attention_mask,
+        "past_key_values": past_key_values,
+        "position_ids": position_ids,
+    }
+    if "inputs_embeds" in _CREATE_CAUSAL_MASK_PARAMETERS:
+        kwargs["inputs_embeds"] = inputs_embeds
+    else:
+        kwargs["input_embeds"] = inputs_embeds
+    if "cache_position" in _CREATE_CAUSAL_MASK_PARAMETERS:
+        kwargs["cache_position"] = cache_position
+    return create_causal_mask(**kwargs)
 
 
 @use_kernel_forward_from_hub("RMSNorm")
@@ -111,6 +139,10 @@ def eager_attention_forward(
     attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
         causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
+        if causal_mask.shape[-1] < key_states.shape[-2]:
+            causal_mask = F.pad(causal_mask, (key_states.shape[-2] - causal_mask.shape[-1], 0), value=0.0)
+        if causal_mask.shape[-2] != query.shape[-2]:
+            causal_mask = causal_mask[:, :, -query.shape[-2] :, :]
         attn_weights = attn_weights + causal_mask
 
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
@@ -1060,9 +1092,9 @@ class Qwen3ASRThinkerTextModel(Qwen3ASRPreTrainedModel):
         else:
             text_position_ids = position_ids[0]
 
-        attention_mask = create_causal_mask(
+        attention_mask = _create_qwen3_asr_causal_mask(
             config=self.config,
-            input_embeds=inputs_embeds,
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             cache_position=cache_position,
             past_key_values=past_key_values,

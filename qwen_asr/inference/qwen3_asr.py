@@ -23,7 +23,7 @@ from qwen_asr.core.transformers_backend import (
     Qwen3ASRForConditionalGeneration,
     Qwen3ASRProcessor,
 )
-from transformers import AutoConfig, AutoModel, AutoProcessor
+from transformers import AutoConfig, AutoModel, AutoProcessor, __version__ as _transformers_version
 
 AutoConfig.register("qwen3_asr", Qwen3ASRConfig, exist_ok=True)
 AutoModel.register(Qwen3ASRConfig, Qwen3ASRForConditionalGeneration, exist_ok=True)
@@ -52,6 +52,40 @@ try:
     ModelRegistry.register_model("Qwen3ASRForConditionalGeneration", Qwen3ASRForConditionalGeneration)
 except:
     pass
+
+
+def _is_transformers_5_or_newer() -> bool:
+    try:
+        return int(_transformers_version.split(".", 1)[0]) >= 5
+    except (TypeError, ValueError):
+        return False
+
+
+def _iter_model_parts(model: Any):
+    stack = [model]
+    seen = set()
+    while stack:
+        part = stack.pop()
+        if id(part) in seen:
+            continue
+        seen.add(id(part))
+        yield part
+        for attr in ("thinker", "model"):
+            child = getattr(part, attr, None)
+            if child is not None:
+                stack.append(child)
+
+
+def _prepare_transformers5_runtime(model: Any) -> None:
+    for part in _iter_model_parts(model):
+        config = getattr(part, "config", None)
+        if config is not None:
+            setattr(config, "use_cache", False)
+            if hasattr(config, "_attn_implementation"):
+                setattr(config, "_attn_implementation", "eager")
+        generation_config = getattr(part, "generation_config", None)
+        if generation_config is not None:
+            setattr(generation_config, "use_cache", False)
 
 
 @dataclass
@@ -161,6 +195,8 @@ class Qwen3ASRModel:
         self.max_new_tokens = max_new_tokens
 
         if backend == "transformers":
+            if _is_transformers_5_or_newer():
+                _prepare_transformers5_runtime(model)
             self.device = getattr(model, "device", None)
             if self.device is None:
                 try:
@@ -507,7 +543,10 @@ class Qwen3ASRModel:
             inputs = self.processor(text=sub_text, audio=sub_wavs, return_tensors="pt", padding=True)
             inputs = inputs.to(self.model.device).to(self.model.dtype)
 
-            text_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            generation_kwargs = {"max_new_tokens": self.max_new_tokens}
+            if _is_transformers_5_or_newer():
+                generation_kwargs["use_cache"] = False
+            text_ids = self.model.generate(**inputs, **generation_kwargs)
 
             decoded = self.processor.batch_decode(
                 text_ids.sequences[:, inputs["input_ids"].shape[1]:],
